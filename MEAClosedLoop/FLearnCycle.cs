@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using System.IO;
 using MEAClosedLoop.Common;
 namespace MEAClosedLoop
 {
@@ -29,7 +30,27 @@ namespace MEAClosedLoop
     private int SigmaCount = 8; // во сколько раз значение сигнала должно превышать сигму шума, что бы считаться  спайком
 
     public int ChannelIdx = 1; // default channel index
-    
+
+    private bool _ManualBreak = false;
+
+    private bool ManualBreak
+    {
+      set
+      {
+        _ManualBreak = value;
+        if (_ManualBreak)
+        {
+          RSManualButton.BeginInvoke(new Action(() => RSManualButton.Enabled = false));
+        }
+      }
+      get
+      {
+        bool old = _ManualBreak;
+        _ManualBreak = false;
+        RSManualButton.BeginInvoke(new Action(() => RSManualButton.Enabled = true));
+        return old;
+      }
+    } // после одного чтения становится false
 
     #endregion
 
@@ -40,7 +61,7 @@ namespace MEAClosedLoop
 
     //очередь пачек (содержит RS пачки из последних N вызванных)
     private Queue<EvokedPackInfo> BurstQueue = new Queue<EvokedPackInfo>();
-
+ 
     //очередь стимулов (содержит не устаревшие стимулы)
     private Queue<TTime> StimQueue = new Queue<TTime>();
 
@@ -59,6 +80,7 @@ namespace MEAClosedLoop
     private List<ShahafCycleIteration> CycleInfo = new List<ShahafCycleIteration>();
     private ShahafCycleIteration currentIteration = new ShahafCycleIteration();
 
+    private string logFilePath = "";
     #endregion
 
     public FLearnCycle(CLoopController _LoopController, CFiltering _Filter)
@@ -245,7 +267,7 @@ namespace MEAClosedLoop
                 evokedPackInfo.Pack = pack;
                 evokedPackInfo.AbsStim = stim;
                 EvokedPacksQueue.Enqueue(evokedPackInfo);
-
+                break;
               }
             }
           }
@@ -310,38 +332,73 @@ namespace MEAClosedLoop
           currentIteration.ElapsedStimTime = (int)(CurrentTime - currentIteration.StartTime);
           //Если время стимуляции пройденно полностью или выполнился R/S > xxx, 
           //завершаем стимуляцию и переходим к отдыху 
-          //[TODO]: вычислить R/S, а пока false
+
+          bool IfBreak = ManualBreak;
           lock (PackQueueLock)
-            if (currentIteration.ElapsedStimTime >= (int)(this.PStimLength.Value) * Param.MS * 1000 || BurstQueue.Count() >= this.PRSCount.Value)
+          {
+            if (currentIteration.ElapsedStimTime >= (int)(this.PStimLength.Value) * Param.MS * 1000 || 
+              BurstQueue.Count() >= this.PRSCount.Value ||
+              IfBreak)
             {
-              loopController.DoStim = false;
-              CycleState = ShahafCycleState.CoolDown;
-              currentIteration.StartCoolDown = CurrentTime;
-              if (BurstQueue.Count() >= this.PRSCount.Value)
+
+              if (BurstQueue.Count() >= this.PRSCount.Value || IfBreak)
               {
-                LernLogTextBox.BeginInvoke(new Action<string>(s => LernLogTextBox.AppendText(s)),
-                  Environment.NewLine +
-                  "[" + (CurrentTime / 25000).ToString() +
-                  "] Выполнен RS критерий( " +
-                  currentIteration.ElapsedStimCount.ToString() +
-                  " стимулов ), переход в отдых культуры");
+                RSManualButton.BeginInvoke(new Action(() => RSManualButton.Enabled = false));
+                if (StimBreakCheckBox.Checked)
+                {
+                  //если выключаем стимуляцию
+                  LernLogTextBox.BeginInvoke(new Action<string>(s => LernLogTextBox.AppendText(s)),
+                    Environment.NewLine +
+                    "[" + (CurrentTime / 25000).ToString() +
+                    "] Выполнен RS критерий( " +
+                    currentIteration.ElapsedStimCount.ToString() +
+                    " стимулов ), переход в отдых культуры");
+                }
+                else
+                {
+                  //если не выключаем стимуляцию
+
+                  LernLogTextBox.BeginInvoke(new Action<string>(s => LernLogTextBox.AppendText(s)),
+                    Environment.NewLine +
+                    "[" + (CurrentTime / 25000).ToString() +
+                    "] Выполнен RS критерий( " +
+                    currentIteration.ElapsedStimCount.ToString() +
+                    " стимулов ), cтимуляция продолжается");
+                  CycleState = ShahafCycleState.PostRSStim;
+                  loopController.DoStim = true;
+                  return;
+
+                }
               }
               else
               {
                 LernLogTextBox.BeginInvoke(new Action<string>(s => LernLogTextBox.AppendText(s)),
                   Environment.NewLine + "[" + (CurrentTime / 25000).ToString() + "] Превышено время ожидания RS критерия, переход в отдых культуры");
               }
-              BurstQueue.Clear();
-              EvokedPacksQueue.Clear();
+
               TrainEvolutionGraph.BeginInvoke(new Action(() => TrainEvolutionGraph.Refresh()));
 
               loopController.OnPackFound -= RecievePackData;
               Filter.RemoveStimulConsumer(RecieveStimData);
 
-
+              loopController.DoStim = false;
+              CycleState = ShahafCycleState.CoolDown;
+              currentIteration.StartCoolDown = CurrentTime;
               return;
             }
-
+          }
+          break;
+        case ShahafCycleState.PostRSStim:
+          if ((int)(CurrentTime - currentIteration.StartTime) >= (int)(this.PStimLength.Value) * Param.MS * 1000)
+          {
+            loopController.DoStim = false;
+            CycleState = ShahafCycleState.CoolDown;
+            currentIteration.StartCoolDown = CurrentTime;
+            LernLogTextBox.BeginInvoke(new Action<string>(s => LernLogTextBox.AppendText(s)),
+                  Environment.NewLine + "[" + (CurrentTime / 25000).ToString() + "] Достигнуто максимальное время стимуляции, начало отдыха культуры");
+            
+            return;
+          }
           break;
         case ShahafCycleState.CoolDown:
           //добавляем время отдыха
@@ -360,7 +417,10 @@ namespace MEAClosedLoop
 
             LernLogTextBox.BeginInvoke(new Action<string>(s => LernLogTextBox.Text += s),
                  Environment.NewLine + "[" + (CurrentTime / 25000).ToString() + "] Выполнен отдых культуры, итерация завершена");
+            BurstQueue.Clear();
+            EvokedPacksQueue.Clear();
             RunNewCycleIteration();
+            RSManualButton.BeginInvoke(new Action(() => RSManualButton.Enabled = true));
             return;
           }
           break;
@@ -458,6 +518,13 @@ namespace MEAClosedLoop
 
     private void StartCycle_Click(object sender, EventArgs e)
     {
+      SaveFileDialog dialog = new SaveFileDialog();
+      switch (dialog.ShowDialog())
+      {
+        case System.Windows.Forms.DialogResult.OK:
+          logFilePath = dialog.FileName;
+          break;
+      }
       StartTime = Filter.TimeStamp;
       loopController.OnPackFound += RecievePackData;
       Filter.AddStimulConsumer(RecieveStimData);
@@ -466,6 +533,7 @@ namespace MEAClosedLoop
       {
         control.Enabled = false;
       }
+      RSManualButton.Enabled = true;
       StartCycle.Enabled = false;
       CurrentTime = Filter.TimeStamp - StartTime;
       RunNewCycleIteration();
@@ -583,7 +651,8 @@ namespace MEAClosedLoop
             average = EvokedPacksQueue.ElementAt(position).average;
           }
           */
-          average = EvokedPacksQueue.ElementAt(position).average;
+
+          average = BurstQueue.ElementAt(position).average;
           //отрисовка пачки
           //[TODO]: Сделать оптимизацию (отрисовывать только входяющую в окно часть пачки)
           for (int idx = 0; idx < PackData[(int)this.PSelectIndex.Value].Length - 1 /*&& idx < 110 * Param.MS*/; idx++)
@@ -749,12 +818,27 @@ namespace MEAClosedLoop
     {
       TrainEvolutionGraph.Refresh();
     }
+
+    private void RSManualButton_Click(object sender, EventArgs e)
+    {
+      ManualBreak = true;
+    }
+
+    private void LernLogTextBox_TextChanged(object sender, EventArgs e)
+    {
+      if(logFilePath.Length > 10)
+      using (StreamWriter swr = new StreamWriter(logFilePath))
+      {
+        swr.Write(LernLogTextBox.Text);
+      }
+    }
   }
 
   public enum ShahafCycleState
   {
     NotStarted,
     RunningStim,
+    PostRSStim,
     CoolDown,
     Finished
   }

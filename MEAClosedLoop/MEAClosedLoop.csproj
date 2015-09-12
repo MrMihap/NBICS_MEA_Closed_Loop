@@ -83,6 +83,10 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
+    <Reference Include="ZedGraph, Version=5.1.5.28844, Culture=neutral, PublicKeyToken=02a83cbd123fcd60, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\ZedGraph.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CDataFlowController.cs" />
@@ -120,6 +124,12 @@
       <DependentUpon>FSelectExperiment.cs</DependentUpon>
     </Compile>
     <Compile Include="CPackDetector.cs" />
+    <Compile Include="FBurstDescription.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FBurstDescription.Designer.cs">
+      <DependentUpon>FBurstDescription.cs</DependentUpon>
+    </Compile>
     <Compile Include="FChSorter.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -213,17 +223,31 @@
     <Compile Include="FStatForm.Designer.cs">
       <DependentUpon>FStatForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="TypeDefs.cs" />
     <Compile Include="UI Forms\FBurstFormDisplay.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI Forms\FBurstFormDisplay.Designer.cs">
       <DependentUpon>FBurstFormDisplay.cs</DependentUpon>
     </Compile>
+    <Compile Include="UI Forms\FSingleChDisplay.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI Forms\FSingleChDisplay.Designer.cs">
+      <DependentUpon>FSingleChDisplay.cs</DependentUpon>
+    </Compile>
     <Compile Include="UI Forms\FDataSourceControl.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI Forms\FDataSourceControl.Designer.cs">
       <DependentUpon>FDataSourceControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="CDataRenderNew.cs" />
+    <Compile Include="UI Forms\FMultiChDisplay.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI Forms\FMultiChDisplay.Designer.cs">
+      <DependentUpon>FMultiChDisplay.cs</DependentUpon>
     </Compile>
     <EmbeddedResource Include="Common\FCreateMeasure.resx">
       <DependentUpon>FCreateMeasure.cs</DependentUpon>
@@ -233,6 +257,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Common\FSelectExperiment.resx">
       <DependentUpon>FSelectExperiment.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FBurstDescription.resx">
+      <DependentUpon>FBurstDescription.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FChSorter.resx">
       <DependentUpon>FChSorter.cs</DependentUpon>
@@ -283,8 +310,14 @@
     <EmbeddedResource Include="UI Forms\FBurstFormDisplay.resx">
       <DependentUpon>FBurstFormDisplay.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="UI Forms\FSingleChDisplay.resx">
+      <DependentUpon>FSingleChDisplay.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UI Forms\FDataSourceControl.resx">
       <DependentUpon>FDataSourceControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UI Forms\FMultiChDisplay.resx">
+      <DependentUpon>FMultiChDisplay.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="app.config">
       <SubType>Designer</SubType>
